@@ -18,7 +18,7 @@ import sys
 from draw_funcs import *
 from pipe_modeling import *
 
-NUM_SENSORS = 8 
+NUM_SENSORS = 12 
 PIPE_DIAM_IN = 30
 
 
@@ -63,7 +63,7 @@ class PIPE_gui:
         self.pipe_rad = in2cm(PIPE_DIAM_IN)/2.
         for i in range(0, NUM_SENSORS):
             self.measurements[i] = self.pipe_rad
-            self.variances[i] = np.random.random()
+            self.variances[i] = np.random.random()*.9
         self.active_pt = 0
 
         # Bind arrow keys
@@ -92,7 +92,6 @@ class PIPE_gui:
     # Is called by the planner to draw the world 
     def render(self):
 
-        # Fit a least-squares ellipse to the pipe and render it
         m_pts = np.zeros((self.measurements.size, 2))
 
         i = 0
@@ -102,50 +101,10 @@ class PIPE_gui:
             m_pts[i,1] = m*sin(t)
             i += 1
 
-        oval_pts = model_pipe_slice(m_pts) 
-        for o in range(0, oval_pts.size/2):
-            oval_pts[2*o] = world2screen_x(self.canvas, oval_pts[2*o])
-            oval_pts[2*o+1] = world2screen_y(self.canvas, oval_pts[2*o+1])
+        render_pipe(self.canvas, self.measurements, self.variances, 'Pipewall')
+        render_pipe(self.canvas, self.measurements+self.variances, self.variances, 'PipePlusError')
+        render_pipe(self.canvas, self.measurements-self.variances, self.variances, 'PipeMinusError')
         
-        self.canvas.delete('least_square_ellipse')
-        self.canvas.create_polygon(tuple(oval_pts), outline=PASTEL_RED,
-                                                    fill='', smooth=True,
-                                                    width=3, dash=10,
-                                                    tag='least_square_ellipse')
-
-        # Model the pipe for real and render it
-        self.canvas.delete('shannon_interp')
-
-        prev_pt = None
-        this_pt = None
-        for theta in np.linspace(0, 2*pi, 100, endpoint=False):
-            
-            if prev_pt is None:
-                interp_m = shannon_interp(theta, self.measurements)
-                first_pt = (world2screen_x(self.canvas, interp_m*cos(theta)),
-                           world2screen_y(self.canvas, interp_m*sin(theta)))
-                prev_pt = first_pt
-            else:
-                interp_m = shannon_interp(theta, self.measurements)
-                this_pt = (world2screen_x(self.canvas, interp_m*cos(theta)),
-                           world2screen_y(self.canvas, interp_m*sin(theta)))
-
-                interp_v = shannon_interp(theta, self.variances)
-                interp_v = min(1, max(interp_v, 0))
-                redness = '{:02X}'.format(int(interp_v*255))
-                blueness = '{:02X}'.format(int((1-interp_v)*255))
-                color = '#'+redness+'00'+blueness
-
-                line = (prev_pt[0], prev_pt[1], this_pt[0], this_pt[1])
-                self.canvas.create_line(line, fill=color, width=3, tag='shannon_interp')
-                prev_pt = this_pt
-
-        interp_v = shannon_interp(2*pi, self.variances)
-        redness = '{:02X}'.format(int(interp_v*255))
-        blueness = '{:02X}'.format(int((1-interp_v)*255))
-        color = '#'+redness+'00'+blueness
-        line = (this_pt[0], this_pt[1], first_pt[0], first_pt[1])
-        self.canvas.create_line(line, fill=color, width=3, tag='shannon_interp')
 
         # Render the measurements points
         self.canvas.delete('m_pt')

@@ -1,0 +1,17 @@
+Author: Jordan Ford
+Date: April 2017
+
+This is a demonstration of windowed-sinc interpolation applied to 
+the problem of modeling a pipe using sparse measurements.
+
+To run:
+
+./gui_main
+
+or
+
+python gui_main.py
+
+
+When you run the code, it will print a usage message to the command line
+describing the controls.
