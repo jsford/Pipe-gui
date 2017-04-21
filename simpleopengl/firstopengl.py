@@ -1,3 +1,4 @@
+#!/usr/bin/python
 SCREEN_SIZE = (1600, 1200)
 
 import numpy as np
@@ -12,6 +13,10 @@ from pygame.locals import *
 from gameobjects.matrix44 import *
 from gameobjects.vector3 import *
 
+def ft2m(feet):
+    return feet*0.3048
+def in2m(inches):
+    return inches*0.0254
 
 def resize(width, height):
     
@@ -45,7 +50,9 @@ class Pipe(object):
         self.axis = Vector3.from_floats(0, 0, -1)
         self.display_list_pipe = None
         self.display_list_deposit = None
-        self.deposits = 0.03*np.abs(np.random.rand(100,100))
+
+        self.deposits = in2m(1)*np.random.rand(100,100)
+        self.deposits[self.deposits < 0] = 0
 
         self.pipe_verts = []*100
         self.pipe_norms = []*100
@@ -151,17 +158,17 @@ def run():
     glMaterial(GL_FRONT, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
 
     # This object renders the pipe
-    pipeX = Pipe(10, .5, (1, 0, 0), (0,0,1))
+    pipe = Pipe(10, in2m(30/2.0), (1, 0, 0), (0,0,1))
 
     # Camera transform matrix
     camera_matrix = Matrix44()
-    #camera_matrix.translate = (10.0, .6, 10.0)
+    camera_matrix.translate = (0.0, 0.0, 0.8)
 
     # Initialize speeds and directions
     rotation_direction = Vector3()
     rotation_speed = radians(90.0)
     movement_direction = Vector3()
-    movement_speed = 5.0    
+    movement_speed = ft2m(10)/60.0
 
     while True:
         
@@ -181,7 +188,7 @@ def run():
         
         # Reset rotation and movement directions
         rotation_direction.set(0.0, 0.0, 0.0)
-        movement_direction.set(0.0, 0.0, -.01)
+        movement_direction.set(0.0, 0.0, -1.0)
         
         # Modify direction vectors for key presses
         if pressed[K_LEFT]:
@@ -197,9 +204,9 @@ def run():
         elif pressed[K_x]:
             rotation_direction.z = +1.0            
         if pressed[K_q]:
-            movement_direction.z = -1.0
+            movement_direction.z = -5.0
         elif pressed[K_a]:
-            movement_direction.z = +1.0
+            movement_direction.z = +5.0
         
         # Calculate rotation matrix and multiply by camera matrix    
         rotation = rotation_direction * rotation_speed * time_passed_seconds
@@ -218,7 +225,7 @@ def run():
         glLight(GL_LIGHT0, GL_POSITION,  (0, 1.5, 1, 0)) 
                 
         # Render the pipe
-        pipeX.render()
+        pipe.render()
         
         # Show the screen
         pygame.display.flip()
