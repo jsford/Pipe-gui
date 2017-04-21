@@ -33,11 +33,11 @@ class PIPE_gui:
         win_size_str = str(width) + "x" + str(height)
         self.top.geometry(win_size_str)
         
-        self.top.configure(background=CHARCOAL)
+        self.top.configure(background='white')
 
         # Add Canvas
         self.canvas = Canvas(self.top, width=self.width-20, height=self.height-20,
-                             background=LIGHT_GREY, borderwidth=0, highlightthickness=0)
+                             background='white', borderwidth=0, highlightthickness=0)
 
         self.canvas.grid(row=0, column=0, columnspan=1, rowspan=1,
                          pady=(10, 10), padx=(10,10), sticky='nsew')
@@ -63,7 +63,7 @@ class PIPE_gui:
         self.pipe_rad = in2cm(PIPE_DIAM_IN)/2.
         for i in range(0, NUM_SENSORS):
             self.measurements[i] = self.pipe_rad
-            self.variances[i] = np.random.random()*.9
+            self.variances[i] = np.random.random()
         self.active_pt = 0
 
         # Bind arrow keys
@@ -102,8 +102,8 @@ class PIPE_gui:
             i += 1
 
         render_pipe(self.canvas, self.measurements, self.variances, 'Pipewall')
-        render_pipe(self.canvas, self.measurements+self.variances, self.variances, 'PipePlusError')
-        render_pipe(self.canvas, self.measurements-self.variances, self.variances, 'PipeMinusError')
+        render_pipe(self.canvas, self.measurements+2*self.variances, self.variances, 'PipePlusError')
+        render_pipe(self.canvas, self.measurements-2*self.variances, self.variances, 'PipeMinusError')
         
 
         # Render the measurements points
@@ -132,10 +132,10 @@ class PIPE_gui:
         self.canvas.delete('origin')
         c1 = (world2screen_x(self.canvas, 0), world2screen_y(self.canvas,  10))
         c2 = (world2screen_x(self.canvas, 0), world2screen_y(self.canvas, -10))
-        self.canvas.create_line(c1[0], c1[1], c2[0], c2[1], fill='white', tag='origin')
+        self.canvas.create_line(c1[0], c1[1], c2[0], c2[1], fill='black', tag='origin')
         c1 = (world2screen_x(self.canvas,  10), world2screen_y(self.canvas, 0))
         c2 = (world2screen_x(self.canvas, -10), world2screen_y(self.canvas, 0))
-        self.canvas.create_line(c1[0], c1[1], c2[0], c2[1], fill='white', tag='origin')
+        self.canvas.create_line(c1[0], c1[1], c2[0], c2[1], fill='black', tag='origin')
         
         
 
