@@ -55,10 +55,9 @@ def interp_color(c1, c2, t):
 
 
 class Pipe(object):
-    def __init__(self, length, rad, pipe_color, deposit_color):
+    def __init__(self, length, rad, pipe_color):
         self.rad = rad
         self.pipe_color = pipe_color
-        self.deposit_color = deposit_color
         self.length = length
         self.axis = Vector3.from_floats(0, 0, -1)
         self.display_list_pipe = None
@@ -114,9 +113,9 @@ class Pipe(object):
                        (self.deposits[s+1, t]      > 0.00001) or
                        (self.deposits[s, t_plus_1] > 0.00001)):
 
-                        c1 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t]/max_dep)
-                        c2 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t]/max_dep)
-                        c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
+                        c1 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t]/max_dep)
+                        c2 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t]/max_dep)
+                        c3 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t_plus_1]/max_dep)
 
                         glColor( c1 )
                         glNormal3dv( self.deposit_norms[s, t, :] )
@@ -132,9 +131,9 @@ class Pipe(object):
                        (self.deposits[s+1, t]         > 0.00001) or
                        (self.deposits[s, t_plus_1]    > 0.00001)):
 
-                        c1 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t_plus_1]/max_dep)
-                        c2 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t]/max_dep)
-                        c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
+                        c1 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t_plus_1]/max_dep)
+                        c2 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t]/max_dep)
+                        c3 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t_plus_1]/max_dep)
 
                         glColor( c1 )
                         glNormal3dv( self.deposit_norms[s+1, t_plus_1, :] )
@@ -168,15 +167,20 @@ class Pipe(object):
             for s in range(0, 128-1):
                 for t in range(0, 128):
                     theta = t*2*np.pi/128.0
-                    glNormal3dv( self.pipe_norms[s, t, :] )
 
                     t_plus_1 = (t+1)%128
+                    glNormal3dv( self.pipe_norms[s, t, :] )
                     glVertex( self.pipe_verts[    s, t, :] )
-                    glVertex( self.pipe_verts[(s+1), t, :] )
+                    glNormal3dv( self.pipe_norms[s+1, t, :] )
+                    glVertex( self.pipe_verts[s+1, t, :] )
+                    glNormal3dv( self.pipe_norms[s, t_plus_1, :] )
                     glVertex( self.pipe_verts[    s, t_plus_1, :] )
 
-                    glVertex( self.pipe_verts[(s+1), t_plus_1, :] )
-                    glVertex( self.pipe_verts[(s+1), t, :] )
+                    glNormal3dv( self.pipe_norms[s+1, t, :] )
+                    glVertex( self.pipe_verts[s+1, t, :] )
+                    glNormal3dv( self.pipe_norms[s+1, t_plus_1, :] )
+                    glVertex( self.pipe_verts[s+1, t_plus_1, :] )
+                    glNormal3dv( self.pipe_norms[s, t_plus_1, :] )
                     glVertex( self.pipe_verts[    s, t_plus_1, :] )
 
             glEnd()
@@ -202,7 +206,7 @@ def run():
     glMaterial(GL_FRONT, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
 
     # This object renders the pipe
-    pipe = Pipe(10, in2m(30/2.0), (0, 0, 1), (1,0,0))
+    pipe = Pipe(10, in2m(30/2.0), (231/255., 231/255., 231/255.))
 
     # Camera transform matrix
     camera_matrix = Matrix44()
