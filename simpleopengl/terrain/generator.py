@@ -5,10 +5,10 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 
 
 def _map_get(map, x, y):
-    return map[x%map.shape[0], y%map.shape[1]]
+    return map[x%(map.shape[0]), y%(map.shape[1])]
 
 def _map_set(map, x, y, val):
-    map[x, y] = val
+    map[x%(map.shape[0]), y%(map.shape[1])] = val
 
 def _diamond_avg(map, tile_x, tile_y, tile_size):
     diamond_sum  = _map_get(map, tile_x, tile_y)
@@ -33,7 +33,7 @@ def diamond_square_alg(scale=7):
     # Technically, tile size is 2**scale + 1, but this works out much
     # more conveniently since most of the time I need tile_size-1 not tile_size.
     tile_size = 2**scale
-    map = np.zeros((tile_size+1, tile_size+1))
+    map = np.zeros((tile_size, tile_size))
 
     # Initialize the corner values
     _map_set(map, 0, 0, 2*np.random.rand())
@@ -81,15 +81,16 @@ def threshold_map(map, threshold):
 
 if __name__ == "__main__":
 
-    Z = diamond_square_alg(scale=5)
+    Z = diamond_square_alg(scale=4)
     
     X = np.linspace(0, Z.shape[0], Z.shape[0], endpoint=False)
     Y = np.linspace(0, Z.shape[1], Z.shape[1], endpoint=False)
     (X, Y) = np.meshgrid(X,Y)
 
+
     fig = plt.figure()
     ax  = Axes3D(fig)
-    ax.plot_surface(X, Y, Z, rstride=1, cstride=1, cmap=cm.coolwarm) 
+    ax.plot_surface(X, Y, Z.transpose(), rstride=1, cstride=1, cmap=cm.coolwarm) 
     plt.show()
     
 

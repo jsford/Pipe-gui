@@ -67,24 +67,24 @@ class Pipe(object):
         # Create the deposit surface using the
         # diamond-square terrain generation algorithm.
         self.deposits = diamond_square_alg(7)
-        self.threshold = 0.5
+        self.threshold = 0.3
         self.deposits = threshold_map(self.deposits, self.threshold)
         self.deposits *= in2m(1.0) 
 
-        self.pipe_verts = []*100
-        self.pipe_norms = []*100
+        self.pipe_verts = np.zeros((128, 128, 3))
+        self.pipe_norms = np.zeros((128, 128, 3))
 
-        self.deposit_verts = []*100
-        self.deposit_norms = []*100
+        self.deposit_verts = np.zeros((128, 128, 3))
+        self.deposit_norms = np.zeros((128, 128, 3))
 
-        for s in range(0, 100):
-            center = tuple(self.axis*(s/100.0*self.length) + Vector3(0,0,0))
-            for t in range(0, 100):
-                theta = t*2*np.pi/100.0
-                self.pipe_verts.append( (center[0]+self.rad*np.cos(theta), center[1]+self.rad*np.sin(theta), center[2]) )
-                self.pipe_norms.append( tuple(Vector3.from_points(self.pipe_verts[-1], center)) ) 
+        for s in range(0, 128):
+            center = tuple(self.axis*(s/128.0*self.length) + Vector3(0,0,0))
+            for t in range(0, 128):
+                theta = t*2*np.pi/128.0
+                self.pipe_verts[s,t,:] = (center[0]+self.rad*np.cos(theta), center[1]+self.rad*np.sin(theta), center[2])
+                self.pipe_norms[s,t,:] = (tuple(Vector3.from_points(self.pipe_verts[s,t,:], center))) 
                 r = self.rad - self.deposits[s,t]
-                self.deposit_verts.append( (center[0]+r*np.cos(theta), center[1]+r*np.sin(theta), center[2]) )
+                self.deposit_verts[s,t] = (center[0]+r*np.cos(theta), center[1]+r*np.sin(theta), center[2])
 
         self.deposit_norms = self.pipe_norms
 
@@ -103,12 +103,11 @@ class Pipe(object):
             glBegin(GL_TRIANGLES)
             
             max_dep = np.amax(self.deposits)
-            for s in range(0, 100-1):
-                for t in range(0, 100):
-                    theta = t*2*np.pi/100.0
-                    glNormal3dv( self.deposit_norms[s*100+t] )
+            for s in range(0, 128-1):
+                for t in range(0, 128):
+                    theta = t*2*np.pi/128.0
 
-                    t_plus_1 = (t+1)%100
+                    t_plus_1 = (t+1)%128
 
 
                     if ((self.deposits[s, t]       > 0.00001) or
@@ -120,11 +119,14 @@ class Pipe(object):
                         c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
 
                         glColor( c1 )
-                        glVertex( self.deposit_verts[    s * 100 + t  ] )
+                        glNormal3dv( self.deposit_norms[s, t, :] )
+                        glVertex( self.deposit_verts[s, t, :] )
                         glColor( c2 )
-                        glVertex( self.deposit_verts[(s+1) * 100 + t  ] )
+                        glNormal3dv( self.deposit_norms[s+1, t, :] )
+                        glVertex( self.deposit_verts[s+1, t, :] )
                         glColor( c3 )
-                        glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
+                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s, t_plus_1, :] )
 
                     if ((self.deposits[s+1, t_plus_1] > 0.00001) or
                        (self.deposits[s+1, t]         > 0.00001) or
@@ -135,11 +137,14 @@ class Pipe(object):
                         c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
 
                         glColor( c1 )
-                        glVertex( self.deposit_verts[(s+1) * 100 + t_plus_1 ] )
+                        glNormal3dv( self.deposit_norms[s+1, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s+1, t_plus_1, :] )
                         glColor( c2 )
-                        glVertex( self.deposit_verts[(s+1) * 100 + t ] )
+                        glNormal3dv( self.deposit_norms[s+1, t, :] )
+                        glVertex( self.deposit_verts[s+1, t, :] )
                         glColor( c3 )
-                        glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
+                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s, t_plus_1, :] )
 
             glEnd()
     
@@ -160,19 +165,19 @@ class Pipe(object):
 
             glBegin(GL_TRIANGLES)
             
-            for s in range(0, 100-1):
-                for t in range(0, 100):
-                    theta = t*2*np.pi/100.0
-                    glNormal3dv( self.pipe_norms[s*100+t] )
+            for s in range(0, 128-1):
+                for t in range(0, 128):
+                    theta = t*2*np.pi/128.0
+                    glNormal3dv( self.pipe_norms[s, t, :] )
 
-                    t_plus_1 = (t+1)%100
-                    glVertex( self.pipe_verts[    s * 100 + t  ] )
-                    glVertex( self.pipe_verts[(s+1) * 100 + t  ] )
-                    glVertex( self.pipe_verts[    s * 100 + t_plus_1 ] )
+                    t_plus_1 = (t+1)%128
+                    glVertex( self.pipe_verts[    s, t, :] )
+                    glVertex( self.pipe_verts[(s+1), t, :] )
+                    glVertex( self.pipe_verts[    s, t_plus_1, :] )
 
-                    glVertex( self.pipe_verts[(s+1) * 100 + t_plus_1 ] )
-                    glVertex( self.pipe_verts[(s+1) * 100 + t ] )
-                    glVertex( self.pipe_verts[    s * 100 + t_plus_1 ] )
+                    glVertex( self.pipe_verts[(s+1), t_plus_1, :] )
+                    glVertex( self.pipe_verts[(s+1), t, :] )
+                    glVertex( self.pipe_verts[    s, t_plus_1, :] )
 
             glEnd()
     
