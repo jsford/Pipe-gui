@@ -39,6 +39,8 @@ def init():
     glClearColor(0.0, 0.0, 0.0, 0.0)
 
     glEnable(GL_COLOR_MATERIAL)
+    glEnable(GL_BLEND);
+    glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)        
@@ -51,11 +53,24 @@ def interp_color(c1, c2, t):
     h3 = t*h1+(1-t)*h2
     s3 = t*s1+(1-t)*s2
     v3 = t*v1+(1-t)*v2
-    return colorsys.hsv_to_rgb(h3, s3, v3)
+    r, g, b = colorsys.hsv_to_rgb(h3, s3, v3)
+
+    # Blend the edges using a shape like this
+    # ---------
+    #          \
+    #           \
+    #            \
+    #             \___
+
+    if t < 0.2:
+        alpha = t*c1[3] + (1-t)*c2[3]
+    else:
+        alpha = 1.0
+    return (r, g, b, alpha)
 
 
 class Pipe(object):
-    def __init__(self, length, rad, pipe_color):
+    def __init__(self, length, rad, pipe_color, deposit_seed=None):
         self.rad = rad
         self.pipe_color = pipe_color
         self.length = length
@@ -65,7 +80,7 @@ class Pipe(object):
 
         # Create the deposit surface using the
         # diamond-square terrain generation algorithm.
-        self.deposits = diamond_square_alg(7)
+        self.deposits = diamond_square_alg(7, seed=deposit_seed)
         self.threshold = 0.3
         self.deposits = threshold_map(self.deposits, self.threshold)
         self.deposits *= in2m(1.0) 
@@ -91,69 +106,6 @@ class Pipe(object):
 
     def render(self):
 
-        if self.display_list_deposit is None:
-            
-            
-            # Create a display list
-            self.display_list_deposit = glGenLists(1)                
-            glNewList(self.display_list_deposit, GL_COMPILE)
-
-
-            glBegin(GL_TRIANGLES)
-            
-            max_dep = np.amax(self.deposits)
-            for s in range(0, 128-1):
-                for t in range(0, 128):
-                    theta = t*2*np.pi/128.0
-
-                    t_plus_1 = (t+1)%128
-
-
-                    if ((self.deposits[s, t]       > 0.00001) or
-                       (self.deposits[s+1, t]      > 0.00001) or
-                       (self.deposits[s, t_plus_1] > 0.00001)):
-
-                        c1 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t]/max_dep)
-                        c2 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t]/max_dep)
-                        c3 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t_plus_1]/max_dep)
-
-                        glColor( c1 )
-                        glNormal3dv( self.deposit_norms[s, t, :] )
-                        glVertex( self.deposit_verts[s, t, :] )
-                        glColor( c2 )
-                        glNormal3dv( self.deposit_norms[s+1, t, :] )
-                        glVertex( self.deposit_verts[s+1, t, :] )
-                        glColor( c3 )
-                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
-                        glVertex( self.deposit_verts[s, t_plus_1, :] )
-
-                    if ((self.deposits[s+1, t_plus_1] > 0.00001) or
-                       (self.deposits[s+1, t]         > 0.00001) or
-                       (self.deposits[s, t_plus_1]    > 0.00001)):
-
-                        c1 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t_plus_1]/max_dep)
-                        c2 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s+1, t]/max_dep)
-                        c3 = interp_color((1, 0, 0), (0, 1, 0), self.deposits[s, t_plus_1]/max_dep)
-
-                        glColor( c1 )
-                        glNormal3dv( self.deposit_norms[s+1, t_plus_1, :] )
-                        glVertex( self.deposit_verts[s+1, t_plus_1, :] )
-                        glColor( c2 )
-                        glNormal3dv( self.deposit_norms[s+1, t, :] )
-                        glVertex( self.deposit_verts[s+1, t, :] )
-                        glColor( c3 )
-                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
-                        glVertex( self.deposit_verts[s, t_plus_1, :] )
-
-            glEnd()
-    
-            glEndList()
-
-        else:
-            
-            # Render the display list            
-            glCallList(self.display_list_deposit)
-
         if self.display_list_pipe is None:
             
             # Create a display list
@@ -166,7 +118,6 @@ class Pipe(object):
             
             for s in range(0, 128-1):
                 for t in range(0, 128):
-                    theta = t*2*np.pi/128.0
 
                     t_plus_1 = (t+1)%128
                     glNormal3dv( self.pipe_norms[s, t, :] )
@@ -192,6 +143,73 @@ class Pipe(object):
             # Render the display list            
             glCallList(self.display_list_pipe)
 
+
+        if self.display_list_deposit is None:
+            
+            
+            # Create a display list
+            self.display_list_deposit = glGenLists(1)                
+            glNewList(self.display_list_deposit, GL_COMPILE)
+
+
+            glBegin(GL_TRIANGLES)
+            
+            max_dep = np.amax(self.deposits)
+            min_dep = 0
+            rng_dep = (max_dep-min_dep)
+
+            for s in range(0, 128-1):
+                for t in range(0, 128):
+
+                    t_plus_1 = (t+1)%128
+
+
+                    if ((self.deposits[s, t]       > 0.0001) or
+                       (self.deposits[s+1, t]      > 0.0001) or
+                       (self.deposits[s, t_plus_1] > 0.0001)):
+
+                        c1 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s, t]-min_dep)/rng_dep)
+                        c2 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s+1, t]-min_dep)/rng_dep)
+                        c3 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s, t_plus_1]-min_dep)/rng_dep)
+
+
+                        glColor4f( *c1 )
+                        glNormal3dv( self.deposit_norms[s, t, :] )
+                        glVertex( self.deposit_verts[s, t, :] )
+                        glColor4f( *c2 )
+                        glNormal3dv( self.deposit_norms[s+1, t, :] )
+                        glVertex( self.deposit_verts[s+1, t, :] )
+                        glColor4f( *c3 )
+                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s, t_plus_1, :] )
+
+                    if ((self.deposits[s+1, t_plus_1] > 0.0001) or
+                       (self.deposits[s+1, t]         > 0.0001) or
+                       (self.deposits[s, t_plus_1]    > 0.0001)):
+
+                        c1 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s+1, t_plus_1]-min_dep)/rng_dep)
+                        c2 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s+1, t]-min_dep)/rng_dep)
+                        c3 = interp_color((1, 0, 0, 1), (0, 1, 0, 0), (self.deposits[s, t_plus_1]-min_dep)/rng_dep)
+
+                        glColor( c1 )
+                        glNormal3dv( self.deposit_norms[s+1, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s+1, t_plus_1, :] )
+                        glColor( c2 )
+                        glNormal3dv( self.deposit_norms[s+1, t, :] )
+                        glVertex( self.deposit_verts[s+1, t, :] )
+                        glColor( c3 )
+                        glNormal3dv( self.deposit_norms[s, t_plus_1, :] )
+                        glVertex( self.deposit_verts[s, t_plus_1, :] )
+
+            glEnd()
+    
+            glEndList()
+
+        else:
+            
+            # Render the display list            
+            glCallList(self.display_list_deposit)
+
 def run():
     
     pygame.init()
@@ -206,7 +224,7 @@ def run():
     glMaterial(GL_FRONT, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
 
     # This object renders the pipe
-    pipe = Pipe(10, in2m(30/2.0), (231/255., 231/255., 231/255.))
+    pipe = Pipe(10, in2m(30/2.0), (231/255., 231/255., 231/255.), deposit_seed=2)
 
     # Camera transform matrix
     camera_matrix = Matrix44()

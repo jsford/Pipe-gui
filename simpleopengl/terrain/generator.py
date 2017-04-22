@@ -29,7 +29,9 @@ def _square_avg(map, tile_x, tile_y, tile_size):
     return square_sum/4.0 
         
 
-def diamond_square_alg(scale=7):
+def diamond_square_alg(scale=7, seed=None):
+    if seed is not None:
+        np.random.seed(seed)
     # Technically, tile size is 2**scale + 1, but this works out much
     # more conveniently since most of the time I need tile_size-1 not tile_size.
     tile_size = 2**scale
