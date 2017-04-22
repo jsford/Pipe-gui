@@ -1,8 +1,9 @@
 #!/usr/bin/python
-SCREEN_SIZE = (1600, 1200)
+SCREEN_SIZE = (1200, 740)
 
 import numpy as np
 from math import radians 
+import colorsys
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -12,6 +13,8 @@ from pygame.locals import *
 
 from gameobjects.matrix44 import *
 from gameobjects.vector3 import *
+
+from terrain.generator import *
 
 def ft2m(feet):
     return feet*0.3048
@@ -32,7 +35,7 @@ def init():
     
     glEnable(GL_DEPTH_TEST)
     
-    glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+    glShadeModel( GL_SMOOTH )
     glClearColor(0.0, 0.0, 0.0, 0.0)
 
     glEnable(GL_COLOR_MATERIAL)
@@ -40,6 +43,16 @@ def init():
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)        
     glLight(GL_LIGHT0, GL_POSITION,  (0, 1, 1, 0))    
+
+
+def interp_color(c1, c2, t):
+    h1, s1, v1 = colorsys.rgb_to_hsv(c1[0], c1[1], c1[2])
+    h2, s2, v2 = colorsys.rgb_to_hsv(c2[0], c2[1], c2[2])
+    h3 = t*h1+(1-t)*h2
+    s3 = t*s1+(1-t)*s2
+    v3 = t*v1+(1-t)*v2
+    return colorsys.hsv_to_rgb(h3, s3, v3)
+
 
 class Pipe(object):
     def __init__(self, length, rad, pipe_color, deposit_color):
@@ -51,8 +64,12 @@ class Pipe(object):
         self.display_list_pipe = None
         self.display_list_deposit = None
 
-        self.deposits = in2m(1)*np.random.rand(100,100)
-        self.deposits[self.deposits < 0] = 0
+        # Create the deposit surface using the
+        # diamond-square terrain generation algorithm.
+        self.deposits = diamond_square_alg(7)
+        self.threshold = 0.5
+        self.deposits = threshold_map(self.deposits, self.threshold)
+        self.deposits *= in2m(1.0) 
 
         self.pipe_verts = []*100
         self.pipe_norms = []*100
@@ -82,23 +99,47 @@ class Pipe(object):
             self.display_list_deposit = glGenLists(1)                
             glNewList(self.display_list_deposit, GL_COMPILE)
 
-            glColor( self.deposit_color )
 
             glBegin(GL_TRIANGLES)
             
+            max_dep = np.amax(self.deposits)
             for s in range(0, 100-1):
                 for t in range(0, 100):
                     theta = t*2*np.pi/100.0
                     glNormal3dv( self.deposit_norms[s*100+t] )
 
                     t_plus_1 = (t+1)%100
-                    glVertex( self.deposit_verts[    s * 100 + t  ] )
-                    glVertex( self.deposit_verts[(s+1) * 100 + t  ] )
-                    glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
 
-                    glVertex( self.deposit_verts[(s+1) * 100 + t_plus_1 ] )
-                    glVertex( self.deposit_verts[(s+1) * 100 + t ] )
-                    glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
+
+                    if ((self.deposits[s, t]       > 0.00001) or
+                       (self.deposits[s+1, t]      > 0.00001) or
+                       (self.deposits[s, t_plus_1] > 0.00001)):
+
+                        c1 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t]/max_dep)
+                        c2 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t]/max_dep)
+                        c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
+
+                        glColor( c1 )
+                        glVertex( self.deposit_verts[    s * 100 + t  ] )
+                        glColor( c2 )
+                        glVertex( self.deposit_verts[(s+1) * 100 + t  ] )
+                        glColor( c3 )
+                        glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
+
+                    if ((self.deposits[s+1, t_plus_1] > 0.00001) or
+                       (self.deposits[s+1, t]         > 0.00001) or
+                       (self.deposits[s, t_plus_1]    > 0.00001)):
+
+                        c1 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t_plus_1]/max_dep)
+                        c2 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s+1, t]/max_dep)
+                        c3 = interp_color(self.deposit_color, self.pipe_color, self.deposits[s, t_plus_1]/max_dep)
+
+                        glColor( c1 )
+                        glVertex( self.deposit_verts[(s+1) * 100 + t_plus_1 ] )
+                        glColor( c2 )
+                        glVertex( self.deposit_verts[(s+1) * 100 + t ] )
+                        glColor( c3 )
+                        glVertex( self.deposit_verts[    s * 100 + t_plus_1 ] )
 
             glEnd()
     
@@ -107,7 +148,6 @@ class Pipe(object):
         else:
             
             # Render the display list            
-            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
             glCallList(self.display_list_deposit)
 
         if self.display_list_pipe is None:
@@ -141,7 +181,6 @@ class Pipe(object):
         else:
             
             # Render the display list            
-            glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
             glCallList(self.display_list_pipe)
 
 def run():
@@ -158,7 +197,7 @@ def run():
     glMaterial(GL_FRONT, GL_DIFFUSE, (1.0, 1.0, 1.0, 1.0))
 
     # This object renders the pipe
-    pipe = Pipe(10, in2m(30/2.0), (1, 0, 0), (0,0,1))
+    pipe = Pipe(10, in2m(30/2.0), (0, 0, 1), (1,0,0))
 
     # Camera transform matrix
     camera_matrix = Matrix44()
@@ -189,6 +228,7 @@ def run():
         # Reset rotation and movement directions
         rotation_direction.set(0.0, 0.0, 0.0)
         movement_direction.set(0.0, 0.0, -1.0)
+        movement_speed = ft2m(10)/60.0
         
         # Modify direction vectors for key presses
         if pressed[K_LEFT]:
@@ -205,8 +245,10 @@ def run():
             rotation_direction.z = +1.0            
         if pressed[K_q]:
             movement_direction.z = -5.0
+            movement_speed = 1.0
         elif pressed[K_a]:
             movement_direction.z = +5.0
+            movement_speed = 1.0
         
         # Calculate rotation matrix and multiply by camera matrix    
         rotation = rotation_direction * rotation_speed * time_passed_seconds
