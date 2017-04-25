@@ -1,0 +1,8 @@
+prefix=/home/jordan/Documents/PipeDream/pipedream_ws/install
+
+Name: dreamer
+Description: Description of dreamer
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/jordan/Documents/PipeDream/pipedream_ws/install/lib 
+Requires: 

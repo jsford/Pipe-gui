@@ -1,0 +1,6 @@
+<launch>
+
+<node pkg="dreamer" type="talker" name="talker" output="screen"/>
+<node pkg="dreamer" type="listener" name="listener" output="screen"/>
+
+</launch>
