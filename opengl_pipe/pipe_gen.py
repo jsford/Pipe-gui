@@ -29,22 +29,25 @@ class Pipe(object):
         self.display_list_pipe = None
         self.display_list_deposit = None
 
+        self.r_samples = 128    # Radial samples
+        self.l_samples = 256    # Longitudinal samples
+
         # Create the deposit surface using the
         # diamond-square terrain generation algorithm.
         
-        self.deposits = DepositGenerator(128, 256, threshold=0.2).pipe_map.transpose()
+        self.deposits = DepositGenerator(self.r_samples, self.l_samples, threshold=0.2).pipe_map.transpose()
         self.deposits *= in2m(1.0) 
 
-        self.pipe_verts = np.zeros((256, 128, 3))
-        self.pipe_norms = np.zeros((256, 128, 3))
+        self.pipe_verts = np.zeros((self.l_samples, self.r_samples, 3))
+        self.pipe_norms = np.zeros((self.l_samples, self.r_samples, 3))
 
-        self.deposit_verts = np.zeros((256, 128, 3))
-        self.deposit_norms = np.zeros((256, 128, 3))
+        self.deposit_verts = np.zeros((self.l_samples, self.r_samples, 3))
+        self.deposit_norms = np.zeros((self.l_samples, self.r_samples, 3))
 
-        for s in range(0, 256):
-            center = tuple(self.axis*(s/256.0*self.length) + Vector3(0,0,0))
-            for t in range(0, 128):
-                theta = t*2*np.pi/128.0
+        for s in range(0, self.l_samples):
+            center = tuple(self.axis*(s/float(self.l_samples)*self.length) + Vector3(0,0,0))
+            for t in range(0, self.r_samples):
+                theta = t*2*np.pi/self.r_samples
                 self.pipe_verts[s,t,:] = (center[0]+self.rad*np.cos(theta), center[1]+self.rad*np.sin(theta), center[2])
                 self.pipe_norms[s,t,:] = (tuple(Vector3.from_points(self.pipe_verts[s,t,:], center))) 
                 self.pipe_norms[s,t,:] /= np.linalg.norm(self.pipe_norms[s,t,:])
@@ -61,9 +64,9 @@ class Pipe(object):
         max_dep = np.amax(self.deposits)
         rng_dep = max_dep - min_dep
 
-        deposit_colors = np.zeros((256, 128, 4), dtype=np.uint8)
-        for s in range(0, 256):
-            for t in range(0, 128):
+        deposit_colors = np.zeros((self.l_samples, self.r_samples, 4), dtype=np.uint8)
+        for s in range(0, self.l_samples):
+            for t in range(0, self.r_samples):
                 deposit_colors[s,t,:] = self.interp_color((1,0,0,1), (0,1,0,0),
                                                         (self.deposits[s, t]-min_dep)/rng_dep)
         texture = Image.fromarray(deposit_colors,'RGBA')
@@ -91,23 +94,23 @@ class Pipe(object):
         pipe_input_list.addInput(1, 'NORMAL', '#pipenorms-array')
 
         pipe_indices = [] 
-        for s in range(0, 256-1):
-            for t in range(0, 128):
-                t_plus_one = (t+1)%128
+        for s in range(0, self.l_samples-1):
+            for t in range(0, self.r_samples):
+                t_plus_one = (t+1)%self.r_samples
 
-                pipe_indices.append(s*128+t)                    # v1
-                pipe_indices.append(s*128+t)                    # n1
-                pipe_indices.append(s*128+t_plus_one)           # v2
-                pipe_indices.append(s*128+t_plus_one)           # n2
-                pipe_indices.append((s+1)*128+t)                # v3
-                pipe_indices.append((s+1)*128+t)                # n3
+                pipe_indices.append(s*self.r_samples+t)                    # v1
+                pipe_indices.append(s*self.r_samples+t)                    # n1
+                pipe_indices.append(s*self.r_samples+t_plus_one)           # v2
+                pipe_indices.append(s*self.r_samples+t_plus_one)           # n2
+                pipe_indices.append((s+1)*self.r_samples+t)                # v3
+                pipe_indices.append((s+1)*self.r_samples+t)                # n3
 
-                pipe_indices.append(s*128+t_plus_one)           # v1
-                pipe_indices.append(s*128+t_plus_one)           # n1
-                pipe_indices.append((s+1)*128+t_plus_one)       # v2
-                pipe_indices.append((s+1)*128+t_plus_one)       # n2
-                pipe_indices.append((s+1)*128+t)                # v3
-                pipe_indices.append((s+1)*128+t)                # n3
+                pipe_indices.append(s*self.r_samples+t_plus_one)           # v1
+                pipe_indices.append(s*self.r_samples+t_plus_one)           # n1
+                pipe_indices.append((s+1)*self.r_samples+t_plus_one)       # v2
+                pipe_indices.append((s+1)*self.r_samples+t_plus_one)       # n2
+                pipe_indices.append((s+1)*self.r_samples+t)                # v3
+                pipe_indices.append((s+1)*self.r_samples+t)                # n3
         
 
         pipe_triset = pipe_geom.createTriangleSet(np.array(pipe_indices), pipe_input_list, 'materialref')
@@ -135,36 +138,36 @@ class Pipe(object):
         mesh.images.append(image)
 
         dep_uv = []
-        for s in range(0, 256):
-            for t in range(0, 128):
-                dep_uv.append(t/127.0)
-                dep_uv.append(1-s/255.0)
+        for s in range(0, self.l_samples):
+            for t in range(0, self.r_samples):
+                dep_uv.append(t/float(self.r_samples-1))
+                dep_uv.append(1-s/float(self.l_samples-1))
 
 
         dep_indices = [] 
-        for s in range(0, 256-1):
-            for t in range(0, 128):
-                t_plus_one = (t+1)%128
+        for s in range(0, self.l_samples-1):
+            for t in range(0, self.r_samples):
+                t_plus_one = (t+1)%self.r_samples
 
-                dep_indices.append(s*128+t)                     # v1
-                dep_indices.append(s*128+t)                     # n1
-                dep_indices.append(s*128+t)                     # uv1
-                dep_indices.append(s*128+t_plus_one)            # v2
-                dep_indices.append(s*128+t_plus_one)            # n2
-                dep_indices.append(s*128+t_plus_one)            # uv2
-                dep_indices.append((s+1)*128+t)                 # v3
-                dep_indices.append((s+1)*128+t)                 # n3
-                dep_indices.append((s+1)*128+t)                 # uv3
+                dep_indices.append(s*self.r_samples+t)                     # v1
+                dep_indices.append(s*self.r_samples+t)                     # n1
+                dep_indices.append(s*self.r_samples+t)                     # uv1
+                dep_indices.append(s*self.r_samples+t_plus_one)            # v2
+                dep_indices.append(s*self.r_samples+t_plus_one)            # n2
+                dep_indices.append(s*self.r_samples+t_plus_one)            # uv2
+                dep_indices.append((s+1)*self.r_samples+t)                 # v3
+                dep_indices.append((s+1)*self.r_samples+t)                 # n3
+                dep_indices.append((s+1)*self.r_samples+t)                 # uv3
 
-                dep_indices.append(s*128+t_plus_one)            # v1
-                dep_indices.append(s*128+t_plus_one)            # n1
-                dep_indices.append(s*128+t_plus_one)            # uv1
-                dep_indices.append((s+1)*128+t_plus_one)        # v2
-                dep_indices.append((s+1)*128+t_plus_one)        # n2
-                dep_indices.append((s+1)*128+t_plus_one)        # uv2
-                dep_indices.append((s+1)*128+t)                 # v3
-                dep_indices.append((s+1)*128+t)                 # n3
-                dep_indices.append((s+1)*128+t)                 # uv3
+                dep_indices.append(s*self.r_samples+t_plus_one)            # v1
+                dep_indices.append(s*self.r_samples+t_plus_one)            # n1
+                dep_indices.append(s*self.r_samples+t_plus_one)            # uv1
+                dep_indices.append((s+1)*self.r_samples+t_plus_one)        # v2
+                dep_indices.append((s+1)*self.r_samples+t_plus_one)        # n2
+                dep_indices.append((s+1)*self.r_samples+t_plus_one)        # uv2
+                dep_indices.append((s+1)*self.r_samples+t)                 # v3
+                dep_indices.append((s+1)*self.r_samples+t)                 # n3
+                dep_indices.append((s+1)*self.r_samples+t)                 # uv3
 
         
         dep_v = np.reshape(self.deposit_verts, self.pipe_verts.size)
