@@ -90,27 +90,27 @@ class Pipe(object):
         pipe_input_list.addInput(0, 'VERTEX', '#pipeverts-array')
         pipe_input_list.addInput(1, 'NORMAL', '#pipenorms-array')
 
-        indices = [] 
+        pipe_indices = [] 
         for s in range(0, 256-1):
             for t in range(0, 128):
                 t_plus_one = (t+1)%128
 
-                indices.append(s*128+t)
-                indices.append(s*128+t)
-                indices.append(s*128+t_plus_one)
-                indices.append(s*128+t_plus_one)
-                indices.append((s+1)*128+t)
-                indices.append((s+1)*128+t)
+                pipe_indices.append(s*128+t)                    # v1
+                pipe_indices.append(s*128+t)                    # n1
+                pipe_indices.append(s*128+t_plus_one)           # v2
+                pipe_indices.append(s*128+t_plus_one)           # n2
+                pipe_indices.append((s+1)*128+t)                # v3
+                pipe_indices.append((s+1)*128+t)                # n3
 
-                indices.append(s*128+t_plus_one)
-                indices.append(s*128+t_plus_one)
-                indices.append((s+1)*128+t_plus_one)
-                indices.append((s+1)*128+t_plus_one)
-                indices.append((s+1)*128+t)
-                indices.append((s+1)*128+t)
+                pipe_indices.append(s*128+t_plus_one)           # v1
+                pipe_indices.append(s*128+t_plus_one)           # n1
+                pipe_indices.append((s+1)*128+t_plus_one)       # v2
+                pipe_indices.append((s+1)*128+t_plus_one)       # n2
+                pipe_indices.append((s+1)*128+t)                # v3
+                pipe_indices.append((s+1)*128+t)                # n3
         
 
-        pipe_triset = pipe_geom.createTriangleSet(np.array(indices), pipe_input_list, 'materialref')
+        pipe_triset = pipe_geom.createTriangleSet(np.array(pipe_indices), pipe_input_list, 'materialref')
         pipe_geom.primitives.append(pipe_triset)
         mesh.geometries.append(pipe_geom)
 
@@ -121,22 +121,65 @@ class Pipe(object):
 
         # Create the deposit node
 
-        dep_effect = material.Effect("deposit_effect", [], "phong", diffuse=(.4,1,.4), specular=(.1,.1,.1), ambient=(.91, .91, .91), double_sided=True)
-        dep_mat = material.Material("deposit_material", "uranylFluoride", dep_effect)
+        image = material.CImage('deposit_texture', 'deposit.png')
+        surface = material.Surface('deposit_surface', image)
+        sampler2d = material.Sampler2D('deposit_sampler', surface)
+        tex_map = material.Map(sampler2d, 'UVSET0')
+        dep_effect = material.Effect('deposit_effect', [surface, sampler2d], 'lambert', emission=(0,0,0,1),\
+                                     ambient=(1,1,1,1), diffuse=tex_map,\
+                                     transparent=tex_map, transparency=0.0, double_sided=True)
+
+        dep_mat = material.Material("deposit_material_ID", "uranylFluoride", dep_effect)
         mesh.effects.append(dep_effect)
         mesh.materials.append(dep_mat)
+        mesh.images.append(image)
 
+        dep_uv = []
+        for s in range(0, 256):
+            for t in range(0, 128):
+                dep_uv.append(t/127.0)
+                dep_uv.append(s/255.0)
+
+
+        dep_indices = [] 
+        for s in range(0, 256-1):
+            for t in range(0, 128):
+                t_plus_one = (t+1)%128
+
+                dep_indices.append(s*128+t)                     # v1
+                dep_indices.append(s*128+t)                     # n1
+                dep_indices.append(s*128+t)                     # uv1
+                dep_indices.append(s*128+t_plus_one)            # v2
+                dep_indices.append(s*128+t_plus_one)            # n2
+                dep_indices.append(s*128+t_plus_one)            # uv2
+                dep_indices.append((s+1)*128+t)                 # v3
+                dep_indices.append((s+1)*128+t)                 # n3
+                dep_indices.append((s+1)*128+t)                 # uv3
+
+                dep_indices.append(s*128+t_plus_one)            # v1
+                dep_indices.append(s*128+t_plus_one)            # n1
+                dep_indices.append(s*128+t_plus_one)            # uv1
+                dep_indices.append((s+1)*128+t_plus_one)        # v2
+                dep_indices.append((s+1)*128+t_plus_one)        # n2
+                dep_indices.append((s+1)*128+t_plus_one)        # uv2
+                dep_indices.append((s+1)*128+t)                 # v3
+                dep_indices.append((s+1)*128+t)                 # n3
+                dep_indices.append((s+1)*128+t)                 # uv3
+
+        
         dep_v = np.reshape(self.deposit_verts, self.pipe_verts.size)
         dep_n = np.reshape(self.deposit_norms, self.pipe_norms.size)
         dep_vert_src = source.FloatSource('depverts-array', dep_v, ('X','Y','Z'))
         dep_norm_src = source.FloatSource('depnorms-array', dep_n, ('X','Y','Z'))
+        dep_uv_src = source.FloatSource('depuv-array', np.array(dep_uv), ('S', 'T'))
 
-        dep_geom = geometry.Geometry(mesh, 'geometry1', 'deposit', [dep_vert_src, dep_norm_src])
+        dep_geom = geometry.Geometry(mesh, 'geometry1', 'deposit', [dep_vert_src, dep_norm_src, dep_uv_src])
         dep_input_list = source.InputList()
         dep_input_list.addInput(0, 'VERTEX', '#depverts-array')
         dep_input_list.addInput(1, 'NORMAL', '#depnorms-array')
+        dep_input_list.addInput(2, 'TEXCOORD', '#depuv-array', set="0")
 
-        dep_triset = dep_geom.createTriangleSet(np.array(indices), dep_input_list, 'materialref')
+        dep_triset = dep_geom.createTriangleSet(np.array(dep_indices), dep_input_list, 'materialref')
         dep_geom.primitives.append(dep_triset)
         mesh.geometries.append(dep_geom)
 
@@ -144,7 +187,8 @@ class Pipe(object):
         dep_geomnode = scene.GeometryNode(dep_geom, [dep_matnode])
         dep_node = scene.Node('node0', children=[dep_geomnode])
 
-        myscene = scene.Scene('myscene', [pipe_node, dep_node])
+        # TODO: Add pipe_node back here
+        myscene = scene.Scene('myscene', [dep_node])
         mesh.scenes.append(myscene)
         mesh.scene = myscene
 
