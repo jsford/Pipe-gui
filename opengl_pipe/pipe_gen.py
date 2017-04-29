@@ -33,7 +33,7 @@ class Pipe(object):
         # diamond-square terrain generation algorithm.
         
         self.deposits = DepositGenerator(128, 256, threshold=0.2).pipe_map.transpose()
-        self.deposits *= in2m(4.0) 
+        self.deposits *= in2m(1.0) 
 
         self.pipe_verts = np.zeros((256, 128, 3))
         self.pipe_norms = np.zeros((256, 128, 3))
@@ -125,7 +125,7 @@ class Pipe(object):
         surface = material.Surface('deposit_surface', image)
         sampler2d = material.Sampler2D('deposit_sampler', surface)
         tex_map = material.Map(sampler2d, 'UVSET0')
-        dep_effect = material.Effect('deposit_effect', [surface, sampler2d], 'lambert', emission=(0,0,0,1),\
+        dep_effect = material.Effect('deposit_effect', [surface, sampler2d], 'phong', emission=(0,0,0,1),\
                                      ambient=(1,1,1,1), diffuse=tex_map,\
                                      transparent=tex_map, transparency=0.0, double_sided=True)
 
@@ -138,7 +138,7 @@ class Pipe(object):
         for s in range(0, 256):
             for t in range(0, 128):
                 dep_uv.append(t/127.0)
-                dep_uv.append(s/255.0)
+                dep_uv.append(1-s/255.0)
 
 
         dep_indices = [] 
@@ -187,8 +187,7 @@ class Pipe(object):
         dep_geomnode = scene.GeometryNode(dep_geom, [dep_matnode])
         dep_node = scene.Node('node0', children=[dep_geomnode])
 
-        # TODO: Add pipe_node back here
-        myscene = scene.Scene('myscene', [dep_node])
+        myscene = scene.Scene('myscene', [pipe_node, dep_node])
         mesh.scenes.append(myscene)
         mesh.scene = myscene
 
