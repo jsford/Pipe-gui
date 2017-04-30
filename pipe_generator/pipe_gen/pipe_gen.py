@@ -26,7 +26,7 @@ class Pipe(object):
     def __init__(self, pipe_length_m=61, pipe_radius_m=in2m(15),                        
                  max_deposit_thickness_mm=25.4, uniform=False,                          
                  ovality=1.0, dirtiness=0.9, deposit_seed=None,                         
-                 output_filename="test"):
+                 output_filename='test'):
 
         self.pipe_length_m = pipe_length_m
         self.pipe_rad_m = pipe_radius_m
@@ -46,7 +46,7 @@ class Pipe(object):
         # diamond-square terrain generation algorithm.
         # Use the random seed and cleanliness threshold provided.
         # Use the sampling density derived above.
-        print "Generating deposit surface grid with dimension " + str((self.rad_samples, self.lon_samples))
+        print 'Generating deposit surface grid with dimension ' + str((self.rad_samples, self.lon_samples))
         if self.uniform:
             self.deposits = np.ones((self.lon_samples, self.rad_samples))
         else: 
@@ -138,7 +138,7 @@ class Pipe(object):
         f.close()
 
     def export_texture(self):
-        print "Exporting deposit surface to " + self.output_filename + "/texture.png"
+        print 'Exporting deposit surface to ' + self.output_filename + '/texture.png'
         min_dep = 0
         max_dep = np.amax(self.deposits)
         rng_dep = max_dep - min_dep
@@ -152,10 +152,10 @@ class Pipe(object):
         texture.save(self.output_filename+'/texture.png')
 
     def export_world(self):
-        print "Exporting world to " + self.output_filename + "/pipe.world"
+        print 'Exporting world to ' + self.output_filename + '/pipe.world'
 
         if self.output_filename == 'template.world':
-            print "ERROR: output filename cannot be \'template\'"
+            print 'ERROR: output filename cannot be \'template\''
             exit(1)
 
         template_handle = open('template.world', 'r')
@@ -166,15 +166,15 @@ class Pipe(object):
         world_file_handle.close()
 
     def export_pipe(self):
-        print "Exporting pipe to " + self.output_filename + "/pipe.dae"
+        print 'Exporting pipe to ' + self.output_filename + '/pipe.dae'
 
         mesh = Collada()
         mesh.assetInfo.upaxis = asset.UP_AXIS.Z_UP
 
         # Create the pipe node
 
-        pipe_effect = material.Effect("pipe_effect", [], "phong", diffuse=(.91,.91,.91), specular=(.1,.1,.1), ambient=(.91, .91, .91), double_sided=True)
-        pipe_mat = material.Material("pipe_material", "nickel", pipe_effect)
+        pipe_effect = material.Effect('pipe_effect', [], 'phong', diffuse=(.91,.91,.91), specular=(.1,.1,.1), ambient=(.91, .91, .91), double_sided=True)
+        pipe_mat = material.Material('pipe_material', 'nickel', pipe_effect)
         mesh.effects.append(pipe_effect)
         mesh.materials.append(pipe_mat)
 
@@ -212,7 +212,7 @@ class Pipe(object):
         pipe_geom.primitives.append(pipe_triset)
         mesh.geometries.append(pipe_geom)
 
-        pipe_matnode = scene.MaterialNode("materialref", pipe_mat, inputs=[])
+        pipe_matnode = scene.MaterialNode('materialref', pipe_mat, inputs=[])
         pipe_geomnode = scene.GeometryNode(pipe_geom, [pipe_matnode])
         pipe_node = scene.Node('node0', children=[pipe_geomnode])
 
@@ -227,7 +227,7 @@ class Pipe(object):
                                      ambient=(1,1,1,1), diffuse=tex_map,\
                                      transparent=tex_map, transparency=0.0, double_sided=True)
 
-        dep_mat = material.Material("deposit_material_ID", "uranylFluoride", dep_effect)
+        dep_mat = material.Material('deposit_material_ID', 'uranylFluoride', dep_effect)
         mesh.effects.append(dep_effect)
         mesh.materials.append(dep_mat)
         mesh.images.append(image)
@@ -275,13 +275,13 @@ class Pipe(object):
         dep_input_list = source.InputList()
         dep_input_list.addInput(0, 'VERTEX', '#depverts-array')
         dep_input_list.addInput(1, 'NORMAL', '#depnorms-array')
-        dep_input_list.addInput(2, 'TEXCOORD', '#depuv-array', set="0")
+        dep_input_list.addInput(2, 'TEXCOORD', '#depuv-array', set='0')
 
         dep_triset = dep_geom.createTriangleSet(np.array(dep_indices), dep_input_list, 'materialref')
         dep_geom.primitives.append(dep_triset)
         mesh.geometries.append(dep_geom)
 
-        dep_matnode = scene.MaterialNode("materialref", dep_mat, inputs=[])
+        dep_matnode = scene.MaterialNode('materialref', dep_mat, inputs=[])
         dep_geomnode = scene.GeometryNode(dep_geom, [dep_matnode])
         dep_node = scene.Node('node0', children=[dep_geomnode])
 
@@ -308,7 +308,7 @@ class Pipe(object):
         
     
 
-if __name__ == "__main__":
+if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',
@@ -330,15 +330,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if os.path.exists(args.output):
-        print "Overwriting output directory: ./" + args.output
+        print 'Overwriting output directory: ./' + args.output
         shutil.rmtree(args.output)
         os.mkdir(args.output, 0755);
     else:
-        print "Creating output directory: ./" + args.output
+        print 'Creating output directory: ./' + args.output
         os.mkdir(args.output, 0755);
         
     if args.length_m <= args.radius_m:
-        print "ERROR: Aspect ratio is too extreme make your pipe longer or reduce its diameter."
+        print 'ERROR: Aspect ratio is too extreme make your pipe longer or reduce its diameter.'
         exit(1)
 
     pipe = Pipe(pipe_length_m                =          args.length_m,
