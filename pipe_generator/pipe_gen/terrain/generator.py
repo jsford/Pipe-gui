@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import axes3d, Axes3D
 
 class DepositGenerator:
 
-    def __init__(self, samples_radial, samples_longitudinal, threshold=None):
+    def __init__(self, samples_radial, samples_longitudinal, threshold=None, seed=None):
         log_samples_radial = int(np.log2(samples_radial))
         log_samples_longitudinal = int(np.log2(samples_longitudinal))
 
@@ -23,7 +23,7 @@ class DepositGenerator:
 
         section_longitude = 0
         for section_idx in range(0, num_sections):
-            section = self.generate_pipe_section(scale=log_samples_radial)
+            section = self.generate_pipe_section(scale=log_samples_radial, seed=seed)
             longitude_range = range(section_longitude, 
                                     section_longitude+section.shape[1])
             pipe_map[:, longitude_range] = section

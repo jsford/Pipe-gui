@@ -5,6 +5,7 @@ import numpy as np
 from math import radians 
 import colorsys
 import sys
+import argparse
 
 from vector3 import *
 
@@ -19,24 +20,27 @@ def in2m(inches):
     return inches*0.0254
 
 
-
 class Pipe(object):
-    def __init__(self, pipe_length_m, rad, deposit_seed=None):
-        self.rad = rad
-        self.pipe_color = (231/255., 231/255., 231/255.)
-        self.pipe_length_m = pipe_length_m
-        self.axis = Vector3.from_floats(0, 0, -1)
-        self.display_list_pipe = None
-        self.display_list_deposit = None
+    def __init__(self, pipe_length_m=61, pipe_radius_m=in2m(15),                        \
+                 max_deposit_thickness_mm=25.4, dirtiness=0.9, deposit_seed=None,       \
+                 output_filename="test"):
 
-        self.rad_samples = 128    # Radial samples
-        self.lon_samples = 256    # Longitudinal samples
+        self.pipe_length_m = pipe_length_m
+        self.pipe_rad_m = pipe_radius_m
+        self.output_filename=output_filename
+
+        # Use ~64 samples/m radially 
+        # Use ~256 samples/10m longitudinally 
+        self.rad_samples = 2**int(np.log2(64*np.pi*2*self.pipe_rad_m))     # Radial samples
+        self.lon_samples = 2**int(np.log2(25.6*self.pipe_length_m))        # Longitudinal samples
 
         # Create the deposit surface using the
         # diamond-square terrain generation algorithm.
-        
-        self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=0.2).pipe_map.transpose()
-        self.deposits *= in2m(1.0) 
+        # Use the random seed and cleanliness threshold provided.
+        # Use the sampling density derived above.
+        print "Generating deposit surface..."
+        self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=(1-dirtiness)).pipe_map.transpose()
+        self.deposits *= max_deposit_thickness_mm/1000.0 
 
         self.pipe_verts = np.zeros((self.lon_samples, self.rad_samples, 3))
         self.pipe_norms = np.zeros((self.lon_samples, self.rad_samples, 3))
@@ -44,22 +48,61 @@ class Pipe(object):
         self.deposit_verts = np.zeros((self.lon_samples, self.rad_samples, 3))
         self.deposit_norms = np.zeros((self.lon_samples, self.rad_samples, 3))
 
+        self.pipe_axis = Vector3.from_floats(0, 0, -1)
+
         for s in range(0, self.lon_samples):
-            center = tuple(self.axis*(s/float(self.lon_samples)*self.pipe_length_m) + Vector3(0,0,0))
+            center = tuple(self.pipe_axis*(s/float(self.lon_samples)*self.pipe_length_m) + Vector3(0,0,0))
             for t in range(0, self.rad_samples):
                 theta = t*2*np.pi/self.rad_samples
-                self.pipe_verts[s,t,:] = (center[0]+self.rad*np.cos(theta), center[1]+self.rad*np.sin(theta), center[2])
+                self.pipe_verts[s,t,:] = (center[0]+self.pipe_rad_m*np.cos(theta), center[1]+self.pipe_rad_m*np.sin(theta), center[2])
                 self.pipe_norms[s,t,:] = (tuple(Vector3.from_points(self.pipe_verts[s,t,:], center))) 
                 self.pipe_norms[s,t,:] /= np.linalg.norm(self.pipe_norms[s,t,:])
-                r = self.rad - self.deposits[s,t]
+                r = self.pipe_rad_m - self.deposits[s,t]
                 self.deposit_verts[s,t] = (center[0]+r*np.cos(theta), center[1]+r*np.sin(theta), center[2])
 
         self.deposit_norms = self.pipe_norms
 
-        self.generate_texture()
+        self.export_texture()
         self.export_pipe()
+        self.export_world()
 
-    def generate_texture(self):
+    def interp_color(self, c1, c2, t):
+
+        # Interpolate the color based on deposit depth
+
+        h1, s1, v1 = colorsys.rgb_to_hsv(c1[0], c1[1], c1[2])
+        h2, s2, v2 = colorsys.rgb_to_hsv(c2[0], c2[1], c2[2])
+        h3 = t*h1+(1-t)*h2
+        s3 = t*s1+(1-t)*s2
+        v3 = t*v1+(1-t)*v2
+        r, g, b = colorsys.hsv_to_rgb(h3, s3, v3)
+        alpha = 1.0
+
+        # Blend the edges using a shape like this
+        #
+        # ---------
+        #          \
+        #           \
+        #            \
+        #             \___
+        #
+        # Interpolate alpha down to zero.
+        # Interpolate color down to the pipe color.
+
+        if t < 0.1:
+            alpha = t*c1[3] + (1-t)*c2[3]
+            t /= 0.1
+            h1, s1, v1 = colorsys.rgb_to_hsv(r, g, b)
+            h2, s2, v2 = colorsys.rgb_to_hsv(231/255., 231/255., 231/255.)
+            h3 = t*h1+(1-t)*h2
+            s3 = t*s1+(1-t)*s2
+            v3 = t*v1+(1-t)*v2
+            r, g, b = colorsys.hsv_to_rgb(h3, s3, v3)
+
+        return (255*r, 255*g, 255*b, 255*alpha)
+
+    def export_texture(self):
+        print "Writing deposit surface to " + self.output_filename + "/texture.png"
         min_dep = 0
         max_dep = np.amax(self.deposits)
         rng_dep = max_dep - min_dep
@@ -70,9 +113,24 @@ class Pipe(object):
                 deposit_colors[s,t,:] = self.interp_color((1,0,0,1), (0,1,0,0),
                                                         (self.deposits[s, t]-min_dep)/rng_dep)
         texture = Image.fromarray(deposit_colors,'RGBA')
-        texture.save('deposit.png')
+        texture.save(self.output_filename+'/texture.png')
+
+    def export_world(self):
+        print "Exporting world to " + self.output_filename + "/pipe.world"
+
+        if self.output_filename == 'template.world':
+            print "ERROR: output filename cannot be \'template\'"
+
+        template_handle = open('template.world', 'r')
+        world_file_str = template_handle.read()
+        world_file_str = world_file_str.replace('XXXXXX', self.output_filename+'/pipe.dae')
+        world_file_handle = open(self.output_filename+'/pipe.world', 'w')
+        world_file_handle.write(world_file_str)
+        world_file_handle.close()
 
     def export_pipe(self):
+        print "Exporting pipe to " + self.output_filename + "/pipe.dae"
+
         mesh = Collada()
         mesh.assetInfo.upaxis = asset.UP_AXIS.Z_UP
 
@@ -124,7 +182,7 @@ class Pipe(object):
 
         # Create the deposit node
 
-        image = material.CImage('deposit_texture', 'deposit.png')
+        image = material.CImage('deposit_texture', self.output_filename+'/texture.png')
         surface = material.Surface('deposit_surface', image)
         sampler2d = material.Sampler2D('deposit_sampler', surface)
         tex_map = material.Map(sampler2d, 'UVSET0')
@@ -194,48 +252,51 @@ class Pipe(object):
         mesh.scenes.append(myscene)
         mesh.scene = myscene
 
-        mesh.write('test.dae')
-        
-
-    def interp_color(self, c1, c2, t):
-
-        # Interpolate the color based on deposit depth
-
-        h1, s1, v1 = colorsys.rgb_to_hsv(c1[0], c1[1], c1[2])
-        h2, s2, v2 = colorsys.rgb_to_hsv(c2[0], c2[1], c2[2])
-        h3 = t*h1+(1-t)*h2
-        s3 = t*s1+(1-t)*s2
-        v3 = t*v1+(1-t)*v2
-        r, g, b = colorsys.hsv_to_rgb(h3, s3, v3)
-        alpha = 1.0
-
-        # Blend the edges using a shape like this
-        #
-        # ---------
-        #          \
-        #           \
-        #            \
-        #             \___
-        #
-        # Interpolate alpha down to zero.
-        # Interpolate color down to the pipe color.
-
-        if t < 0.1:
-            alpha = t*c1[3] + (1-t)*c2[3]
-            t /= 0.1
-            h1, s1, v1 = colorsys.rgb_to_hsv(r, g, b)
-            h2, s2, v2 = colorsys.rgb_to_hsv(231/255., 231/255., 231/255.)
-            h3 = t*h1+(1-t)*h2
-            s3 = t*s1+(1-t)*s2
-            v3 = t*v1+(1-t)*v2
-            r, g, b = colorsys.hsv_to_rgb(h3, s3, v3)
-
-        return (255*r, 255*g, 255*b, 255*alpha)
+        mesh.write(self.output_filename+'/pipe.dae')
+    
 
 if __name__ == "__main__":
 
-    if len(sys.argv) == 2:
-        terrain_seed = int(sys.argv[1])
-        pipe = Pipe(10, in2m(30/2.0), deposit_seed=terrain_seed)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',\
+                        type=float, default=in2m(15))
+    parser.add_argument('-l', '--length_m', help='The length of the pipe in meters.',\
+                        type=float, default=61)
+    parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',\
+                        type=float, default=25.4)
+    parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe from 0-1.',\
+                        type=float, default=0.4)
+    parser.add_argument('-o', '--output', help='The prefix used for all output files.',\
+                        type=str, default='test')
+    parser.add_argument('-s', '--seed', help='An integer seed used by the RNG to generate the deposit.',\
+                        type=int, default=None)
+    args = parser.parse_args()
+
+    if os.path.exists(args.output):
+        print "Overwriting output directory: ./" + args.output
+        shutil.rmtree(args.output)
+        os.mkdir(args.output, 0755);
     else:
-        pipe = Pipe(10, in2m(30/2.0), deposit_seed=None)
+        print "Creating output directory: ./" + args.output
+        os.mkdir(args.output, 0755);
+        
+
+    pipe = Pipe(pipe_length_m                =          args.length_m,
+                pipe_radius_m                =          args.radius_m,
+                max_deposit_thickness_mm     =          args.thickness_mm,
+                dirtiness                    =          args.dirtiness,
+                deposit_seed                 =          args.seed,
+                output_filename              =          args.output)
+
+
+
+
+
+
+
+
+
+
+
+
+
