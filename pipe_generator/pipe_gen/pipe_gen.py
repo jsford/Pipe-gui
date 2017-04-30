@@ -1,4 +1,11 @@
 #!/usr/bin/python
+
+# Author: Jordan Ford
+# Date: April 30, 2017
+#
+# This script generates pipes for use in simulation for the PipeDream 
+# nuclear inspection project.
+
 SCREEN_SIZE = (800, 600)
 
 import numpy as np
@@ -21,11 +28,20 @@ def ft2m(feet):
 def in2m(inches):
     return inches*0.0254
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)    
 
 class Pipe(object):
     def __init__(self, pipe_length_m=61, pipe_radius_m=in2m(15),                        
                  max_deposit_thickness_mm=25.4, uniform=False,                          
-                 ovality=1.0, dirtiness=0.9, deposit_seed=None,                         
+                 ovality=0.0, dirtiness=0.9, deposit_seed=None,                         
                  output_filename='test'):
 
         self.pipe_length_m = pipe_length_m
@@ -63,16 +79,30 @@ class Pipe(object):
 
         self.pipe_axis = Vector3.from_floats(0, 0, -1)
 
+        self.ellipse_a = self.pipe_rad_m + (self.ovality*self.pipe_rad_m)*0.5
+        self.ellipse_b = self.pipe_rad_m - (self.ovality*self.pipe_rad_m)*0.5 
+
         for s in range(0, self.lon_samples):
             center = tuple(self.pipe_axis*(s/float(self.lon_samples)*self.pipe_length_m) + Vector3(0,0,0))
             for t in range(0, self.rad_samples):
                 theta = t*2*np.pi/self.rad_samples
-                self.pipe_rad[s,t] = self.ovality*self.pipe_rad_m / np.sqrt(self.ovality**2+1)
-                self.pipe_verts[s,t,:] = (center[0]+self.ovality*self.pipe_rad_m*np.cos(theta), center[1]+self.pipe_rad_m*np.sin(theta), center[2])
+                self.pipe_rad[s,t] = self.ellipse_a*self.ellipse_b/np.sqrt((self.ellipse_a*np.cos(theta))**2 + (self.ellipse_b*np.sin(theta))**2)
+                self.pipe_verts[s,t,:] = (center[0]+self.ellipse_a*np.cos(theta), center[1]+self.ellipse_b*np.sin(theta), center[2])
                 self.pipe_norms[s,t,:] = (tuple(Vector3.from_points(self.pipe_verts[s,t,:], center))) 
                 self.pipe_norms[s,t,:] /= np.linalg.norm(self.pipe_norms[s,t,:])
-                r = self.pipe_rad_m - self.deposits[s,t]
-                self.deposit_verts[s,t] = (center[0]+r*self.ovality*np.cos(theta), center[1]+r*np.sin(theta), center[2])
+
+                # Calculate where the deposit will be if it is moved perpendicularly into the oval 
+                # of the pipe by an amount equal to the local deposit thickness.
+                m = self.pipe_verts[s,t,0]                                      # The x coord of the pipe
+                n = self.pipe_verts[s,t,1]                                      # The y coord of the pipe
+                normal_slope = (n*self.ellipse_a**2) / (m*self.ellipse_b**2)    # The slope of the line normal to the pipe at (m,n)
+
+                normal = np.asarray([1, normal_slope])*np.sign(m)               # A vector pointing the right direction
+                normal /= np.linalg.norm(normal)                                # Normalized vector to length 1.0
+                normal *= self.deposits[s,t]                                    # Get a vector as long as the deposit is deep.
+            
+                # The coords of the deposit are at the coords of the pipe (c[0]+m, c[1]+n) minus the normal vector.
+                self.deposit_verts[s,t] = (center[0]+m-normal[0], center[1]+n-normal[1], center[2])
 
         self.deposit_norms = self.pipe_norms
 
@@ -129,6 +159,7 @@ class Pipe(object):
         f.write('-----------------------------------------\n')
         f.write('Pipe Length [m]: ' + str(self.pipe_length_m) + '\n')
         f.write('Pipe Radius [m]: ' + str(self.pipe_rad_m) + '\n')
+        f.write('Pipe Ovality [%]: ' + str(100*self.ovality) + '\n')
         f.write('\n')
         f.write('DEPOSIT\n')
         f.write('-----------------------------------------\n')
@@ -158,7 +189,7 @@ class Pipe(object):
             print 'ERROR: output filename cannot be \'template\''
             exit(1)
 
-        template_handle = open('template.world', 'r')
+        template_handle = open(resource_path('template.world'), 'r')
         world_file_str = template_handle.read()
         world_file_str = world_file_str.replace('XXXXXX', self.output_filename+'/pipe.dae')
         world_file_handle = open(self.output_filename+'/pipe.world', 'w')
@@ -306,27 +337,26 @@ class Pipe(object):
                                               pipe_verts=self.pipe_verts,
                                               pipe_norms=self.pipe_norms) 
         
-    
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',
-                        type=float, default=in2m(15))
-    parser.add_argument('-l', '--length_m', help='The length of the pipe in meters.',
-                        type=float, default=61)
-    parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',
-                        type=float, default=25.4)
     parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe as a percent.',
                         type=float, default=40)
-    parser.add_argument('-u', '--uniform', help='Specify that the deposit be uniformly distributed.',
-                        default=False, action='store_true')
+    parser.add_argument('-l', '--length_m', help='The length of the pipe in meters.',
+                        type=float, default=61)
     parser.add_argument('-o', '--output', help='The prefix used for all output files.',
                         type=str, default='test')
+    parser.add_argument('-oval', '--ovality', help='The percent ovality of the pipe. > 0 is wider and < 0 is taller.',
+                        type=float, default=0.0)
+    parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',
+                        type=float, default=in2m(15))
     parser.add_argument('-s', '--seed', help='An integer seed used by the RNG to generate the deposit.',
                         type=int, default=None)
-    parser.add_argument('-oval', '--ovality', help='The percent ovality of the pipe. > 1 is wider. < 1 is taller.',
-                        type=float, default=1.0)
+    parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',
+                        type=float, default=25.4)
+    parser.add_argument('-u', '--uniform', help='Specify that the deposit be uniformly distributed.',
+                        default=False, action='store_true')
     args = parser.parse_args()
 
     if os.path.exists(args.output):

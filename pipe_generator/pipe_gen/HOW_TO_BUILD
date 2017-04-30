@@ -1,0 +1,21 @@
+Hi future Jordan,
+
+Because you almost certainly forgot how to package this code into a single
+executable using pyinstaller, here is the command:
+
+    pyinstaller pipe_gen.py --add-data template.world:./ -F
+
+Or if you haven't changed the resource files you need, you can probably do something like this:
+    pyinstaller pipe_gen.py pipe_gen.spec
+
+Remember to use this resource_path trick on any resources when you access them in the code:
+
+    def resource_path(relative_path):
+        """ Get absolute path to resource, works for dev and for PyInstaller """
+        try:
+            # PyInstaller creates a temp folder and stores path in _MEIPASS
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)    
