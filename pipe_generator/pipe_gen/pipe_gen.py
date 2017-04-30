@@ -5,6 +5,7 @@ import numpy as np
 from math import radians 
 import colorsys
 import sys
+import shutil
 import argparse
 
 from vector3 import *
@@ -27,7 +28,10 @@ class Pipe(object):
 
         self.pipe_length_m = pipe_length_m
         self.pipe_rad_m = pipe_radius_m
+        self.max_deposit_thickness_mm = max_deposit_thickness_mm
+        self.dirtiness = dirtiness
         self.output_filename=output_filename
+        self.deposit_seed = deposit_seed
 
         # Use ~64 samples/m radially 
         # Use ~256 samples/10m longitudinally 
@@ -38,8 +42,8 @@ class Pipe(object):
         # diamond-square terrain generation algorithm.
         # Use the random seed and cleanliness threshold provided.
         # Use the sampling density derived above.
-        print "Generating deposit surface..."
-        self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=(1-dirtiness)).pipe_map.transpose()
+        print "Generating deposit surface grid with dimension " + str((self.rad_samples, self.lon_samples))
+        self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=(1-dirtiness), seed=self.deposit_seed).pipe_map.transpose()
         self.deposits *= max_deposit_thickness_mm/1000.0 
 
         self.pipe_verts = np.zeros((self.lon_samples, self.rad_samples, 3))
@@ -62,6 +66,7 @@ class Pipe(object):
 
         self.deposit_norms = self.pipe_norms
 
+        self.export_pipe_description()
         self.export_texture()
         self.export_pipe()
         self.export_world()
@@ -101,8 +106,27 @@ class Pipe(object):
 
         return (255*r, 255*g, 255*b, 255*alpha)
 
+    def export_pipe_description(self):
+        f = open(self.output_filename+'/pipe.params', 'w')
+        f.write('Pipe Description File\n')
+        f.write('Author: Jordan Ford\n')
+        f.write('This file lists the parameters needed to recreate a pipe.\n\n')
+        f.write('Description: ' + self.output_filename + '\n')
+        f.write('\n')
+        f.write('PIPE\n')
+        f.write('-----------------------------------------\n')
+        f.write('Pipe Length [m]: ' + str(self.pipe_length_m) + '\n')
+        f.write('Pipe Radius [m]: ' + str(self.pipe_rad_m) + '\n')
+        f.write('\n')
+        f.write('DEPOSIT\n')
+        f.write('-----------------------------------------\n')
+        f.write('Deposit RNG seed: ' + str(self.deposit_seed) + '\n')
+        f.write('Max. Deposit Thickness [mm]: ' + str(self.max_deposit_thickness_mm) + '\n')
+        f.write('Dirtiness [%]: ' + str(100*self.dirtiness) + '\n')
+        f.close()
+
     def export_texture(self):
-        print "Writing deposit surface to " + self.output_filename + "/texture.png"
+        print "Exporting deposit surface to " + self.output_filename + "/texture.png"
         min_dep = 0
         max_dep = np.amax(self.deposits)
         rng_dep = max_dep - min_dep
@@ -120,6 +144,7 @@ class Pipe(object):
 
         if self.output_filename == 'template.world':
             print "ERROR: output filename cannot be \'template\'"
+            exit(1)
 
         template_handle = open('template.world', 'r')
         world_file_str = template_handle.read()
@@ -264,8 +289,8 @@ if __name__ == "__main__":
                         type=float, default=61)
     parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',\
                         type=float, default=25.4)
-    parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe from 0-1.',\
-                        type=float, default=0.4)
+    parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe as a percent.',\
+                        type=float, default=40)
     parser.add_argument('-o', '--output', help='The prefix used for all output files.',\
                         type=str, default='test')
     parser.add_argument('-s', '--seed', help='An integer seed used by the RNG to generate the deposit.',\
@@ -280,11 +305,14 @@ if __name__ == "__main__":
         print "Creating output directory: ./" + args.output
         os.mkdir(args.output, 0755);
         
+    if args.length_m <= args.radius_m:
+        print "ERROR: Aspect ratio is too extreme make your pipe longer or reduce its diameter."
+        exit(1)
 
     pipe = Pipe(pipe_length_m                =          args.length_m,
                 pipe_radius_m                =          args.radius_m,
                 max_deposit_thickness_mm     =          args.thickness_mm,
-                dirtiness                    =          args.dirtiness,
+                dirtiness                    =          args.dirtiness/100.0,
                 deposit_seed                 =          args.seed,
                 output_filename              =          args.output)
 
