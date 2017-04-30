@@ -2,6 +2,7 @@
 SCREEN_SIZE = (800, 600)
 
 import numpy as np
+import scipy.io
 from math import radians 
 import colorsys
 import sys
@@ -22,13 +23,16 @@ def in2m(inches):
 
 
 class Pipe(object):
-    def __init__(self, pipe_length_m=61, pipe_radius_m=in2m(15),                        \
-                 max_deposit_thickness_mm=25.4, dirtiness=0.9, deposit_seed=None,       \
+    def __init__(self, pipe_length_m=61, pipe_radius_m=in2m(15),                        
+                 max_deposit_thickness_mm=25.4, uniform=False,                          
+                 ovality=1.0, dirtiness=0.9, deposit_seed=None,                         
                  output_filename="test"):
 
         self.pipe_length_m = pipe_length_m
         self.pipe_rad_m = pipe_radius_m
         self.max_deposit_thickness_mm = max_deposit_thickness_mm
+        self.uniform = uniform
+        self.ovality = ovality
         self.dirtiness = dirtiness
         self.output_filename=output_filename
         self.deposit_seed = deposit_seed
@@ -43,12 +47,17 @@ class Pipe(object):
         # Use the random seed and cleanliness threshold provided.
         # Use the sampling density derived above.
         print "Generating deposit surface grid with dimension " + str((self.rad_samples, self.lon_samples))
-        self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=(1-dirtiness), seed=self.deposit_seed).pipe_map.transpose()
+        if self.uniform:
+            self.deposits = np.ones((self.lon_samples, self.rad_samples))
+        else: 
+            self.deposits = DepositGenerator(self.rad_samples, self.lon_samples, threshold=(1-dirtiness), seed=self.deposit_seed).pipe_map.transpose()
         self.deposits *= max_deposit_thickness_mm/1000.0 
 
+        self.pipe_rad = np.empty_like(self.deposits)
         self.pipe_verts = np.zeros((self.lon_samples, self.rad_samples, 3))
         self.pipe_norms = np.zeros((self.lon_samples, self.rad_samples, 3))
 
+        
         self.deposit_verts = np.zeros((self.lon_samples, self.rad_samples, 3))
         self.deposit_norms = np.zeros((self.lon_samples, self.rad_samples, 3))
 
@@ -58,11 +67,12 @@ class Pipe(object):
             center = tuple(self.pipe_axis*(s/float(self.lon_samples)*self.pipe_length_m) + Vector3(0,0,0))
             for t in range(0, self.rad_samples):
                 theta = t*2*np.pi/self.rad_samples
-                self.pipe_verts[s,t,:] = (center[0]+self.pipe_rad_m*np.cos(theta), center[1]+self.pipe_rad_m*np.sin(theta), center[2])
+                self.pipe_rad[s,t] = self.ovality*self.pipe_rad_m / np.sqrt(self.ovality**2+1)
+                self.pipe_verts[s,t,:] = (center[0]+self.ovality*self.pipe_rad_m*np.cos(theta), center[1]+self.pipe_rad_m*np.sin(theta), center[2])
                 self.pipe_norms[s,t,:] = (tuple(Vector3.from_points(self.pipe_verts[s,t,:], center))) 
                 self.pipe_norms[s,t,:] /= np.linalg.norm(self.pipe_norms[s,t,:])
                 r = self.pipe_rad_m - self.deposits[s,t]
-                self.deposit_verts[s,t] = (center[0]+r*np.cos(theta), center[1]+r*np.sin(theta), center[2])
+                self.deposit_verts[s,t] = (center[0]+r*self.ovality*np.cos(theta), center[1]+r*np.sin(theta), center[2])
 
         self.deposit_norms = self.pipe_norms
 
@@ -70,6 +80,8 @@ class Pipe(object):
         self.export_texture()
         self.export_pipe()
         self.export_world()
+        self.export_mat()
+        self.export_npz()
 
     def interp_color(self, c1, c2, t):
 
@@ -278,23 +290,43 @@ class Pipe(object):
         mesh.scene = myscene
 
         mesh.write(self.output_filename+'/pipe.dae')
+
+    def export_mat(self):
+        print 'Exporting pipe and deposit to .mat file: ' + self.output_filename + '/pipe.mat'
+        dict = {'deposit':self.deposits,
+                'pipe_rad':self.pipe_rad,
+                'pipe_verts':self.pipe_verts,
+                'pipe_norms':self.pipe_norms}
+        scipy.io.savemat(self.output_filename+'/pipe.mat', dict, appendmat=False)
+
+    def export_npz(self):
+        print 'Exporting deposit to .npz file: ' + self.output_filename + '/pipe.npz'
+        np.savez(self.output_filename+'/pipe', deposit=self.deposits,
+                                              pipe_rad=self.pipe_rad,
+                                              pipe_verts=self.pipe_verts,
+                                              pipe_norms=self.pipe_norms) 
+        
     
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',\
+    parser.add_argument('-r', '--radius_m', help='The radius of the pipe in meters.',
                         type=float, default=in2m(15))
-    parser.add_argument('-l', '--length_m', help='The length of the pipe in meters.',\
+    parser.add_argument('-l', '--length_m', help='The length of the pipe in meters.',
                         type=float, default=61)
-    parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',\
+    parser.add_argument('-t', '--thickness_mm', help='The maximum thickness of deposit.',
                         type=float, default=25.4)
-    parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe as a percent.',\
+    parser.add_argument('-d', '--dirtiness', help='The dirtiness of the pipe as a percent.',
                         type=float, default=40)
-    parser.add_argument('-o', '--output', help='The prefix used for all output files.',\
+    parser.add_argument('-u', '--uniform', help='Specify that the deposit be uniformly distributed.',
+                        default=False, action='store_true')
+    parser.add_argument('-o', '--output', help='The prefix used for all output files.',
                         type=str, default='test')
-    parser.add_argument('-s', '--seed', help='An integer seed used by the RNG to generate the deposit.',\
+    parser.add_argument('-s', '--seed', help='An integer seed used by the RNG to generate the deposit.',
                         type=int, default=None)
+    parser.add_argument('-oval', '--ovality', help='The percent ovality of the pipe. > 1 is wider. < 1 is taller.',
+                        type=float, default=1.0)
     args = parser.parse_args()
 
     if os.path.exists(args.output):
@@ -312,6 +344,8 @@ if __name__ == "__main__":
     pipe = Pipe(pipe_length_m                =          args.length_m,
                 pipe_radius_m                =          args.radius_m,
                 max_deposit_thickness_mm     =          args.thickness_mm,
+                uniform                      =          args.uniform,
+                ovality                      =          args.ovality, 
                 dirtiness                    =          args.dirtiness/100.0,
                 deposit_seed                 =          args.seed,
                 output_filename              =          args.output)
